@@ -6,9 +6,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import random
-import csv
-import os
-from bs4 import BeautifulSoup  # Added for HTML parsing
 
 # Set up Selenium WebDriver with more browser-like behavior
 options = webdriver.ChromeOptions()
@@ -55,22 +52,6 @@ def check_and_handle_popups():
                         random_sleep()
     except Exception as e:
         print(f"[INFO] Error handling popups: {e}")
-
-def save_keywords_to_csv(keyword, results):
-    """Save the extracted keywords to a CSV file"""
-    filename = f"keywords_{keyword.replace(' ', '_')}.csv"
-    
-    # Create a directory for results if it doesn't exist
-    os.makedirs("keyword_results", exist_ok=True)
-    filepath = os.path.join("keyword_results", filename)
-    
-    with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['Keyword'])  # Header
-        for result in results:
-            writer.writerow([result])
-    
-    print(f"[SUCCESS] Saved {len(results)} keywords to {filepath}")
 
 def search_keyword(keyword):
     try:
@@ -125,9 +106,6 @@ def search_keyword(keyword):
             # Take a screenshot after search
             driver.save_screenshot(f"after_search_{keyword.replace(' ', '_')}.png")
             
-            # Initialize all_keywords list
-            all_keywords = []
-            
             # Check for any iframes and switch to them if needed
             iframes = driver.find_elements(By.TAG_NAME, "iframe")
             if iframes:
@@ -137,47 +115,10 @@ def search_keyword(keyword):
                         print(f"[INFO] Switching to iframe {i}")
                         driver.switch_to.frame(iframe)
                         driver.save_screenshot(f"iframe_{i}_{keyword.replace(' ', '_')}.png")
-                        
-                        # Save iframe source for debugging
-                        iframe_source = driver.page_source
-                        with open(f"iframe_{i}_source_{keyword.replace(' ', '_')}.html", "w", encoding="utf-8") as f:
-                            f.write(iframe_source)
-                        print(f"[DEBUG] Saved iframe {i} source")
-                        
-                        # Try to extract keywords using multiple methods
-                        iframe_keywords = []
-                        
-                        # Method 1: Direct table extraction
-                        iframe_tables = driver.find_elements(By.TAG_NAME, "table")
-                        if iframe_tables:
-                            print(f"[INFO] Found {len(iframe_tables)} tables in iframe {i}")
-                            for j, table in enumerate(iframe_tables):
-                                print(f"[INFO] Processing table {j} in iframe {i}")
-                                # Debug table structure
-                                print(f"[DEBUG] Table HTML: {table.get_attribute('outerHTML')[:200]}...")
-                                
-                                table_keywords = extract_keywords_from_table(table)
-                                if table_keywords:
-                                    iframe_keywords.extend(table_keywords)
-                                    print(f"[SUCCESS] Extracted {len(table_keywords)} keywords from table {j} in iframe {i}")
-                        
-                        # Method 2: Parse with BeautifulSoup
-                        soup = BeautifulSoup(iframe_source, 'html.parser')
-                        bs_keywords = extract_keywords_with_bs4(soup)
-                        if bs_keywords:
-                            iframe_keywords.extend(bs_keywords)
-                            print(f"[SUCCESS] Extracted {len(bs_keywords)} keywords with BeautifulSoup in iframe {i}")
-                        
-                        # Method 3: JavaScript extraction
-                        js_keywords = extract_keywords_with_js()
-                        if js_keywords:
-                            iframe_keywords.extend(js_keywords)
-                            print(f"[SUCCESS] Extracted {len(js_keywords)} keywords with JavaScript in iframe {i}")
-                        
-                        # Add iframe keywords to all keywords
-                        if iframe_keywords:
-                            all_keywords.extend(iframe_keywords)
-                        
+                        # Look for results in the iframe
+                        elements = driver.find_elements(By.CSS_SELECTOR, "table, .results, .keyword")
+                        if elements:
+                            print(f"[INFO] Found potential results in iframe {i}")
                         # Switch back to main content
                         driver.switch_to.default_content()
                     except Exception as e:
@@ -202,87 +143,56 @@ def search_keyword(keyword):
             # Analyze the page structure to find results
             print("[INFO] Analyzing page structure for results...")
             
-            # Save the entire page source for analysis
-            page_source = driver.page_source
-            with open(f"page_source_{keyword.replace(' ', '_')}.html", "w", encoding="utf-8") as f:
-                f.write(page_source)
-            print(f"[INFO] Saved page source to page_source_{keyword.replace(' ', '_')}.html")
-            
-            # Method 1: Look for tables in the main page
+            # Look for tables
             tables = driver.find_elements(By.TAG_NAME, "table")
             if tables:
                 print(f"[INFO] Found {len(tables)} tables on the page")
                 for i, table in enumerate(tables):
                     print(f"[INFO] Table {i} classes: {table.get_attribute('class')}")
-                    # Debug table structure
-                    print(f"[DEBUG] Table {i} HTML: {table.get_attribute('outerHTML')[:200]}...")
-                    
-                    # Debug table rows
                     rows = table.find_elements(By.TAG_NAME, "tr")
                     print(f"[INFO] Table {i} has {len(rows)} rows")
-                    
-                    # Debug first row content
-                    if rows:
-                        try:
-                            first_row = rows[0]
-                            cells = first_row.find_elements(By.TAG_NAME, "td")
-                            if cells:
-                                print(f"[DEBUG] First row has {len(cells)} cells")
-                                for j, cell in enumerate(cells):
-                                    print(f"[DEBUG] Cell {j} text: '{cell.text}'")
-                            else:
-                                print("[DEBUG] No cells found in first row")
-                        except Exception as e:
-                            print(f"[ERROR] Error debugging first row: {e}")
-                    
-                    # Try to extract keywords
-                    table_keywords = extract_keywords_from_table(table)
-                    if table_keywords:
-                        all_keywords.extend(table_keywords)
-                        print(f"[SUCCESS] Extracted {len(table_keywords)} keywords from table {i}")
+                    if len(rows) > 1:  # If there's more than just a header row
+                        print(f"[SUCCESS] Found results in table {i}:")
+                        for row in rows[1:]:  # Skip header row
+                            cells = row.find_elements(By.TAG_NAME, "td")
+                            if cells and len(cells) > 0:
+                                print(cells[0].text)  # Print first column
             else:
                 print("[INFO] No tables found on the page")
-            
-            # Method 2: Parse with BeautifulSoup
-            soup = BeautifulSoup(page_source, 'html.parser')
-            bs_keywords = extract_keywords_with_bs4(soup)
-            if bs_keywords:
-                all_keywords.extend(bs_keywords)
-                print(f"[SUCCESS] Extracted {len(bs_keywords)} keywords with BeautifulSoup")
-            
-            # Method 3: JavaScript extraction
-            js_keywords = extract_keywords_with_js()
-            if js_keywords:
-                all_keywords.extend(js_keywords)
-                print(f"[SUCCESS] Extracted {len(js_keywords)} keywords with JavaScript")
-            
-            # Method 4: Look for any elements that might contain keyword results
-            print("[INFO] Looking for any elements that might contain keyword results...")
-            element_keywords = extract_keywords_from_other_elements()
-            if element_keywords:
-                all_keywords.extend(element_keywords)
-                print(f"[SUCCESS] Extracted {len(element_keywords)} keywords from other elements")
-            
-            # Remove duplicates and save results
-            all_keywords = list(set(all_keywords))
-            if all_keywords:
-                print(f"[SUCCESS] Found a total of {len(all_keywords)} unique keywords")
-                # Print first 10 keywords for verification
-                print("[DEBUG] Sample of keywords found:")
-                for i, kw in enumerate(all_keywords[:10]):
-                    print(f"  {i+1}. {kw}")
-                save_keywords_to_csv(keyword, all_keywords)
-            else:
-                print("[WARNING] No keywords were found for this search")
                 
-                # Try one last method: direct HTML parsing for specific patterns
-                print("[INFO] Trying direct HTML parsing for keyword patterns...")
-                pattern_keywords = extract_keywords_by_pattern(page_source)
-                if pattern_keywords:
-                    print(f"[SUCCESS] Found {len(pattern_keywords)} keywords by pattern matching")
-                    save_keywords_to_csv(keyword, pattern_keywords)
-                else:
-                    print("[ERROR] All extraction methods failed to find keywords")
+                # Look for any elements that might contain keyword results
+                print("[INFO] Looking for any elements that might contain keyword results...")
+                potential_result_containers = driver.find_elements(
+                    By.CSS_SELECTOR, 
+                    "div.results, .keyword-list, .keyword-results, .suggestions, ul li, ol li, .result-item"
+                )
+                
+                if potential_result_containers:
+                    print(f"[INFO] Found {len(potential_result_containers)} potential result containers")
+                    for container in potential_result_containers:
+                        if container.is_displayed() and container.text.strip():
+                            print(f"[INFO] Container text: {container.text.strip()[:100]}...")
+                
+                # Save the entire page source for analysis
+                with open(f"page_source_{keyword.replace(' ', '_')}.html", "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+                print(f"[INFO] Saved page source to page_source_{keyword.replace(' ', '_')}.html")
+                
+                # Execute JavaScript to get all visible text on the page
+                print("[INFO] Extracting all visible text from the page...")
+                visible_text = driver.execute_script("""
+                    return Array.from(document.querySelectorAll('body *'))
+                        .filter(el => el.offsetParent !== null && !['SCRIPT', 'STYLE'].includes(el.tagName))
+                        .map(el => el.textContent.trim())
+                        .filter(text => text.length > 0 && text.length < 100)
+                        .join('\\n');
+                """)
+                
+                print("[INFO] Sample of visible text:")
+                lines = visible_text.split('\n')
+                for line in lines[:20]:  # Print first 20 lines as a sample
+                    if line.strip():
+                        print(line.strip())
 
         except Exception as e:
             print(f"[ERROR] Error during search process: {e}")
@@ -290,273 +200,6 @@ def search_keyword(keyword):
 
     except Exception as e:
         print(f"[ERROR] Fatal error processing '{keyword}': {e}")
-
-def extract_keywords_from_table(table):
-    """Extract keywords from a table element with enhanced debugging"""
-    keywords = []
-    try:
-        # Try multiple methods to extract table data
-        
-        # Method 1: Standard Selenium approach
-        rows = table.find_elements(By.TAG_NAME, "tr")
-        print(f"[DEBUG] Found {len(rows)} rows in table")
-        
-        for row_idx, row in enumerate(rows):
-            try:
-                # Try to get cells with both td and th tags
-                cells = row.find_elements(By.TAG_NAME, "td")
-                if not cells:
-                    cells = row.find_elements(By.TAG_NAME, "th")
-                
-                if cells:
-                    print(f"[DEBUG] Row {row_idx} has {len(cells)} cells")
-                    for cell_idx, cell in enumerate(cells):
-                        try:
-                            # Try multiple ways to get text
-                            cell_text = cell.text.strip()
-                            if not cell_text:
-                                cell_text = cell.get_attribute("textContent").strip()
-                            
-                            if cell_text:
-                                print(f"[DEBUG] Cell {row_idx},{cell_idx} text: '{cell_text}'")
-                                # Only add if it looks like a keyword (not just a number or single character)
-                                if len(cell_text) > 2 and not cell_text.isdigit():
-                                    keywords.append(cell_text)
-                                    print(f"[INFO] Found keyword in table: {cell_text}")
-                        except Exception as cell_e:
-                            print(f"[ERROR] Error extracting text from cell {row_idx},{cell_idx}: {cell_e}")
-            except Exception as row_e:
-                print(f"[ERROR] Error processing row {row_idx}: {row_e}")
-        
-        # Method 2: JavaScript approach
-        try:
-            table_html = table.get_attribute("outerHTML")
-            js_result = driver.execute_script("""
-                var tableHTML = arguments[0];
-                var tempDiv = document.createElement('div');
-                tempDiv.innerHTML = tableHTML;
-                var table = tempDiv.querySelector('table');
-                var results = [];
-                
-                if (table) {
-                    var rows = table.querySelectorAll('tr');
-                    for (var i = 0; i < rows.length; i++) {
-                        var cells = rows[i].querySelectorAll('td, th');
-                        for (var j = 0; j < cells.length; j++) {
-                            var text = cells[j].textContent.trim();
-                            if (text && text.length > 2 && !/^\d+$/.test(text)) {
-                                results.push(text);
-                            }
-                        }
-                    }
-                }
-                
-                return results;
-            """, table_html)
-            
-            if js_result and isinstance(js_result, list):
-                print(f"[DEBUG] JavaScript extracted {len(js_result)} items from table")
-                for item in js_result:
-                    if item not in keywords:
-                        keywords.append(item)
-                        print(f"[INFO] Found keyword via JavaScript: {item}")
-        except Exception as js_e:
-            print(f"[ERROR] JavaScript extraction failed: {js_e}")
-    
-    except Exception as e:
-        print(f"[ERROR] Error extracting keywords from table: {e}")
-    
-    return keywords
-
-def extract_keywords_with_bs4(soup):
-    """Extract keywords using BeautifulSoup HTML parsing"""
-    keywords = []
-    try:
-        # Look for tables
-        tables = soup.find_all('table')
-        print(f"[DEBUG] BeautifulSoup found {len(tables)} tables")
-        
-        for table_idx, table in enumerate(tables):
-            rows = table.find_all('tr')
-            print(f"[DEBUG] Table {table_idx} has {len(rows)} rows")
-            
-            for row in rows:
-                cells = row.find_all(['td', 'th'])
-                for cell in cells:
-                    text = cell.get_text().strip()
-                    if text and len(text) > 2 and not text.isdigit():
-                        keywords.append(text)
-                        print(f"[INFO] BeautifulSoup found keyword: {text}")
-        
-        # Look for lists that might contain keywords
-        lists = soup.find_all(['ul', 'ol'])
-        for list_elem in lists:
-            items = list_elem.find_all('li')
-            for item in items:
-                text = item.get_text().strip()
-                if text and len(text) > 2 and not text.isdigit():
-                    keywords.append(text)
-                    print(f"[INFO] BeautifulSoup found keyword in list: {text}")
-        
-        # Look for divs with specific classes that might contain keywords
-        keyword_divs = soup.find_all('div', class_=lambda c: c and any(x in c for x in ['keyword', 'result', 'suggestion']))
-        for div in keyword_divs:
-            text = div.get_text().strip()
-            if text and len(text) > 2 and not text.isdigit():
-                keywords.append(text)
-                print(f"[INFO] BeautifulSoup found keyword in div: {text}")
-    
-    except Exception as e:
-        print(f"[ERROR] BeautifulSoup extraction failed: {e}")
-    
-    return keywords
-
-def extract_keywords_with_js():
-    """Extract keywords using JavaScript execution"""
-    keywords = []
-    try:
-        # Execute JavaScript to find text that looks like keywords
-        js_result = driver.execute_script("""
-            // Function to check if text looks like a keyword
-            function isLikelyKeyword(text) {
-                text = text.trim();
-                return text.length > 2 && 
-                       text.length < 100 && 
-                       !(/^\\d+$/.test(text)) &&
-                       text.indexOf(' ') > -1;  // Contains a space (likely a phrase)
-            }
-            
-            var results = [];
-            
-            // Method 1: Get text from table cells
-            var tableCells = document.querySelectorAll('td, th');
-            for (var i = 0; i < tableCells.length; i++) {
-                var text = tableCells[i].textContent.trim();
-                if (isLikelyKeyword(text)) {
-                    results.push(text);
-                }
-            }
-            
-            // Method 2: Get text from list items
-            var listItems = document.querySelectorAll('li');
-            for (var i = 0; i < listItems.length; i++) {
-                var text = listItems[i].textContent.trim();
-                if (isLikelyKeyword(text)) {
-                    results.push(text);
-                }
-            }
-            
-            // Method 3: Get text from divs with keyword-related classes
-            var keywordDivs = Array.from(document.querySelectorAll('div')).filter(function(div) {
-                var className = div.className || '';
-                return className.indexOf('keyword') > -1 || 
-                       className.indexOf('result') > -1 || 
-                       className.indexOf('suggestion') > -1;
-            });
-            
-            for (var i = 0; i < keywordDivs.length; i++) {
-                var text = keywordDivs[i].textContent.trim();
-                if (isLikelyKeyword(text)) {
-                    results.push(text);
-                }
-            }
-            
-            return results;
-        """)
-        
-        if js_result and isinstance(js_result, list):
-            print(f"[DEBUG] JavaScript extracted {len(js_result)} potential keywords")
-            for item in js_result:
-                keywords.append(item)
-                print(f"[INFO] Found keyword via JavaScript: {item}")
-    
-    except Exception as e:
-        print(f"[ERROR] JavaScript extraction failed: {e}")
-    
-    return keywords
-
-def extract_keywords_from_other_elements():
-    """Extract keywords from non-table elements that might contain results"""
-    keywords = []
-    try:
-        # Common selectors for keyword results
-        selectors = [
-            "div.results li", ".keyword-list li", ".keyword-results li", 
-            ".suggestions li", "ul.results li", "ol.results li", 
-            ".result-item", "div.keyword", "span.keyword",
-            ".keyword-ideas li", ".keyword-suggestions li"
-        ]
-        
-        for selector in selectors:
-            elements = driver.find_elements(By.CSS_SELECTOR, selector)
-            print(f"[DEBUG] Found {len(elements)} elements with selector: {selector}")
-            
-            for element in elements:
-                try:
-                    if element.is_displayed():
-                        # Try multiple ways to get text
-                        text = element.text.strip()
-                        if not text:
-                            text = element.get_attribute("textContent").strip()
-                        
-                        if text and len(text) > 2 and not text.isdigit():
-                            keywords.append(text)
-                            print(f"[INFO] Found keyword in element: {text}")
-                except Exception as elem_e:
-                    print(f"[ERROR] Error processing element: {elem_e}")
-    
-    except Exception as e:
-        print(f"[ERROR] Error extracting keywords from other elements: {e}")
-    
-    return keywords
-
-def extract_keywords_by_pattern(html_source):
-    """Extract keywords by pattern matching in the HTML source"""
-    keywords = []
-    try:
-        # Use BeautifulSoup for parsing
-        soup = BeautifulSoup(html_source, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.extract()
-        
-        # Get text
-        text = soup.get_text()
-        
-        # Split into lines and remove leading/trailing space
-        lines = (line.strip() for line in text.splitlines())
-        
-        # Filter lines that look like keywords
-        for line in lines:
-            # Skip empty lines or very short/long lines
-            if not line or len(line) < 3 or len(line) > 100:
-                continue
-                
-            # Skip lines that are just numbers
-            if line.isdigit():
-                continue
-                
-            # Skip lines without spaces (likely not keywords)
-            if ' ' not in line:
-                continue
-                
-            # Skip lines with too many spaces (likely paragraphs)
-            if line.count(' ') > 10:
-                continue
-                
-            # Skip lines with special characters that are unlikely in keywords
-            if any(c in line for c in [':', ';', '=', '{', '}', '[', ']', '(', ')', '|', '\\']):
-                continue
-                
-            # This line might be a keyword
-            keywords.append(line)
-            print(f"[INFO] Found potential keyword by pattern: {line}")
-    
-    except Exception as e:
-        print(f"[ERROR] Pattern extraction failed: {e}")
-    
-    return keywords
 
 # List of keywords to search
 keywords = [
@@ -574,5 +217,3 @@ for keyword in keywords:
 print("[INFO] Finished all searches, closing browser")
 driver.quit()
 
-# For testing purposes, print a message
-print("Script execution completed successfully!")
