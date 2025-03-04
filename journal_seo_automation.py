@@ -32,7 +32,7 @@ def scrape_ryrob_keywords(seed_keyword, max_keywords=15):
     """Scrape keywords from RyRob's keyword tool"""
     keywords = []
     try:
-        print(f"Scraping keywords from RyRob for: {seed_keyword} (max: {max_keywords})")
+        print(f"Scraping keywords from RyRob for: {seed_keyword}")
         driver.get("https://www.ryrob.com/keyword-tool/")
         random_sleep(5, 8)
         
