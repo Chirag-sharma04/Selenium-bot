@@ -103,19 +103,19 @@ def save_keywords_to_csv(data, filename):
 journal_categories = [
     "Gratitude & Positivity Journals",
     "Daily,Weekly & Yearly Journals",
-    # "Productivity & Goal-Setting Journals",
-    # "Mental Health & Self-Care Journals",
-    # "Self-Improvement & Growth Journals",
-    # "Manifestation & Law of Attraction Journals",
-    # "Reflection & Thought Journals",
-    # "Specialized Journals (Shadow Work, ADHD, etc.)",
-    # "Spiritual & Mindfulness Journals",
-    # "Relationship & Emotional Journals",
-    # "Journaling Techniques & Guides",
-    # "Themed & Brand-Specific Journals",
-    # "Online & Digital Journaling",
-    # "Bullet Journals & Creative Journaling",
-    # "Miscellaneous & Notable Journals"
+    "Productivity & Goal-Setting Journals",
+    "Mental Health & Self-Care Journals",
+    "Self-Improvement & Growth Journals",
+    "Manifestation & Law of Attraction Journals",
+    "Reflection & Thought Journals",
+    "Specialized Journals (Shadow Work, ADHD, etc.)",
+    "Spiritual & Mindfulness Journals",
+    "Relationship & Emotional Journals",
+    "Journaling Techniques & Guides",
+    "Themed & Brand-Specific Journals",
+    "Online & Digital Journaling",
+    "Bullet Journals & Creative Journaling",
+    "Miscellaneous & Notable Journals"
 ]
 
 for category in journal_categories:
